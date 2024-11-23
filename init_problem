@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 # Base directory
 DEFAULT_GITHUB_DIR=~/Documents/GitHub/leet-code
 GITHUB_DIR=${GITHUB_DIR:-$DEFAULT_GITHUB_DIR}
