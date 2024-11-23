@@ -1,6 +1,10 @@
 # leet-code
  Space for storing boilerplate and solutions
 
+## Initialize a Problem
+Run `chmod +x init_problem`
+
+And when you're ready to solve a problem, `./init_problem <problem_number>`. This automatically creates a directory, and fetches the problem name.
 
 ## Common Problem Types
 
