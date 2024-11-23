@@ -1,0 +1,197 @@
+#!/bin/bash
+
+#!/bin/bash
+
+# Base directory
+DEFAULT_GITHUB_DIR=~/Documents/GitHub/leet-code
+GITHUB_DIR=${GITHUB_DIR:-$DEFAULT_GITHUB_DIR}
+PROBLEMS_DIR="$GITHUB_DIR/problems"
+
+# Check if the GitHub directory exists
+if [ ! -d "$GITHUB_DIR" ]; then
+    echo "The directory '$GITHUB_DIR' does not exist."
+    read -p "Do you want to create it? (y/yes to create, n/no to update the directory): " CONFIRM
+    if [[ "$CONFIRM" =~ ^(y|yes)$ ]]; then
+        mkdir -p "$GITHUB_DIR"
+        echo "Created directory: $GITHUB_DIR"
+    else
+        read -p "Enter the new directory path: " NEW_DIR
+        if [ -z "$NEW_DIR" ]; then
+            echo "No directory provided. Exiting."
+            exit 1
+        fi
+        GITHUB_DIR=$NEW_DIR
+        PROBLEMS_DIR="$GITHUB_DIR/problems"
+    fi
+fi
+
+# Ensure necessary directories exist
+mkdir -p "$PROBLEMS_DIR"
+
+# Check arguments
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <problem-number>"
+    exit 1
+fi
+
+PROBLEM_NUMBER=$1
+
+# Check and optionally install required Python modules
+REQUIRED_MODULES=("requests")
+for MODULE in "${REQUIRED_MODULES[@]}"; do
+    if ! python3 -c "import $MODULE" &>/dev/null; then
+        echo "Error: Python module '$MODULE' is not installed."
+        read -p "Do you want to install '$MODULE' now? (y/yes to confirm): " CONFIRM
+        if [[ "$CONFIRM" =~ ^(y|yes)$ ]]; then
+            echo "Installing '$MODULE'..."
+            pip install "$MODULE"
+            if [ $? -ne 0 ]; then
+                echo "Failed to install '$MODULE'. Please try installing manually: pip install $MODULE"
+                exit 1
+            fi
+        else
+            echo "Cannot proceed without '$MODULE'. Exiting."
+            exit 1
+        fi
+    fi
+done
+
+# Fetch problem title using GraphQL API
+PROBLEM_TITLE=$(python3 - <<EOF
+import requests
+
+def get_problem_by_number(problem_number):
+    url = "https://leetcode.com/api/problems/all/"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        # Search for the problem by questionFrontendId
+        for problem in data["stat_status_pairs"]:
+            if str(problem["stat"]["frontend_question_id"]) == str(problem_number):
+                return {
+                    "title": problem["stat"]["question__title"],
+                    "slug": problem["stat"]["question__title_slug"],
+                    "difficulty": problem["difficulty"]["level"],
+                }
+    except Exception as e:
+        print(f"Error fetching problem data: {e}")
+        return None
+
+problem_number = "$PROBLEM_NUMBER"
+details = get_problem_by_number(problem_number)
+if details:
+    print(details["title"])
+else:
+    print("Unknown Problem")
+EOF
+)
+
+if [[ "$PROBLEM_TITLE" == "Unknown Problem" ]]; then
+    echo "Error fetching problem title. Using 'problem-$PROBLEM_NUMBER'."
+    PROBLEM_TITLE="problem-$PROBLEM_NUMBER"
+fi
+
+# Format problem slug
+PROBLEM_SLUG=$(echo "$PROBLEM_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')
+
+# Directory for the problem
+PROBLEM_DIR="$PROBLEMS_DIR/$PROBLEM_NUMBER-$PROBLEM_SLUG"
+
+# Check if problem directory already exists
+if [ -d "$PROBLEM_DIR" ]; then
+    echo "Problem '$PROBLEM_NUMBER' already initialized at $PROBLEM_DIR"
+    exit 1
+fi
+
+# Create problem directory
+mkdir -p "$PROBLEM_DIR"
+
+# Create solution file
+SOLUTION_FILE="$PROBLEM_DIR/solution.py"
+cat <<EOF > "$SOLUTION_FILE"
+# Solution for problem $PROBLEM_NUMBER: $PROBLEM_TITLE
+
+class Solution:
+    def solve(self, *args):
+        # Write your solution logic here
+        pass
+
+if __name__ == "__main__":
+    solution = Solution()
+
+    # Read test cases from the test_cases.txt file
+    with open("test_cases.txt", "r") as file:
+        test_cases = file.readlines()
+
+    # Example: Process test cases (modify as needed)
+    for i, test_case in enumerate(test_cases, 1):
+        test_case = test_case.strip()
+        if not test_case:
+            continue
+        # Modify the input processing based on the problem requirements
+        inputs = eval(test_case)  # Assuming test cases are Python-evaluable expressions
+        print(f"Test Case {i}: Input: {inputs}, Output: {solution.solve(*inputs)}")
+EOF
+
+# Create test cases file
+TEST_CASES_FILE="$PROBLEM_DIR/test_cases.txt"
+cat <<EOF > "$TEST_CASES_FILE"
+# Add your test cases below, one per line
+# Example:
+# (1, 2, 3)
+# (4, 5, 6)
+EOF
+
+# Create notes file
+NOTES_FILE="$PROBLEM_DIR/notes.md"
+STARTED_DATE=$(date +"%m/%d/%Y %-I:%M%p")
+{
+    echo "# Leetcode $PROBLEM_NUMBER: $PROBLEM_TITLE"
+    echo "Started: $STARTED_DATE"
+    echo "https://leetcode.com/problems/$PROBLEM_SLUG/"
+    echo ""
+    echo "## Categories"
+    echo "- [ ] Arrays and Strings"
+    echo "- [ ] Linked Lists"
+    echo "- [ ] Stacks and Queues"
+    echo "- [ ] Trees and Graphs"
+    echo "- [ ] Hash Tables"
+    echo "- [ ] Sorting and Searching"
+    echo "- [ ] Dynamic Programming"
+    echo "- [ ] Backtracking"
+    echo "- [ ] Greedy Algorithms"
+    echo "- [ ] Bit Manipulation"
+    echo "- [ ] Math and Geometry"
+    echo "- [ ] Design"
+} > "$NOTES_FILE"
+
+# Function to calculate relative paths
+relative_path() {
+    local TARGET=$1
+    local SOURCE=${2:-$(pwd)}
+    local TDIR=$(dirname "$TARGET")
+    local TNAME=$(basename "$TARGET")
+    local SDIR=$SOURCE
+
+    TDIR=$(cd "$TDIR" 2>/dev/null && pwd)
+    SDIR=$(cd "$SDIR" 2>/dev/null && pwd)
+
+    if [ "$TDIR" = "$SDIR" ]; then
+        echo "./$TNAME"
+    else
+        echo "$TDIR/$TNAME" | sed "s|^$SOURCE/|./|"
+    fi
+}
+
+# Log success with relative paths
+RELATIVE_DIR=$(relative_path "$PROBLEM_DIR")
+RELATIVE_SOLUTION_FILE=$(relative_path "$SOLUTION_FILE")
+RELATIVE_TEST_CASES_FILE=$(relative_path "$TEST_CASES_FILE")
+RELATIVE_NOTES_FILE=$(relative_path "$NOTES_FILE")
+
+echo "Initialized problem '$PROBLEM_NUMBER: $PROBLEM_TITLE' in $RELATIVE_DIR"
+echo "Files created:"
+echo "- $RELATIVE_SOLUTION_FILE"
+echo "- $RELATIVE_TEST_CASES_FILE"
+echo "- $RELATIVE_NOTES_FILE"
